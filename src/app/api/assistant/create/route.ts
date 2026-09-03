@@ -1,4 +1,3 @@
-// app/api/assistant/create/route.js (update your existing API)
 import { NextRequest, NextResponse } from "next/server"
 import cloudinary from "@/lib/cloudinary"
 import connectDB from "@/lib/db/connectDB"
@@ -26,22 +25,37 @@ export async function POST(req: NextRequest) {
 
     let finalImage = image
 
+    // Upload image to Cloudinary if needed
     if (type === "upload" && image) {
       const uploadRes = await cloudinary.uploader.upload(image, {
         folder: "assistants",
       })
+
       finalImage = uploadRes.secure_url
     }
 
-    // Update user and get the updated document
+    // Update user
     const updatedUser = await User.findOneAndUpdate(
       { email: session.user.email },
       {
         assistantName: name,
         assistantImage: finalImage,
       },
-      { new: true } // ✅ This returns the updated document
+      {
+        new: true,
+      }
     )
+
+    // User not found
+    if (!updatedUser) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "User not found",
+        },
+        { status: 404 }
+      )
+    }
 
     return NextResponse.json({
       success: true,
@@ -49,11 +63,11 @@ export async function POST(req: NextRequest) {
       assistant: {
         name: updatedUser.assistantName,
         image: updatedUser.assistantImage,
-      }
+      },
     })
-
   } catch (error) {
-    console.log(error)
+    console.error("Assistant create error:", error)
+
     return NextResponse.json(
       {
         success: false,

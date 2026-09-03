@@ -1,17 +1,17 @@
 "use client"
 
+import { Suspense, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import axios from "axios"
 import { toast } from "sonner"
-import { useState } from "react"
 import bg from "@/public/assets/authBg.png"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Eye, EyeOff } from "lucide-react"
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const params = useSearchParams()
   const router = useRouter()
   const token = params.get("token")
@@ -26,6 +26,11 @@ export default function ResetPasswordPage() {
 
   const onSubmit = async (data: any) => {
     try {
+      if (!token) {
+        toast.error("Invalid or missing reset token")
+        return
+      }
+
       const res = await axios.post("/api/auth/reset-password", {
         token,
         password: data.password,
@@ -36,9 +41,10 @@ export default function ResetPasswordPage() {
       setTimeout(() => {
         router.push("/sign-in")
       }, 2000)
-
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Error")
+      toast.error(
+        error.response?.data?.message || "Error resetting password"
+      )
     }
   }
 
@@ -56,7 +62,9 @@ export default function ResetPasswordPage() {
         </h1>
 
         <div className="space-y-2">
-          <Label className="text-gray-50">New Password</Label>
+          <Label className="text-gray-50">
+            New Password
+          </Label>
 
           <div className="relative">
             <Input
@@ -71,15 +79,37 @@ export default function ResetPasswordPage() {
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
             >
-              {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+              {showPassword ? (
+                <Eye size={18} />
+              ) : (
+                <EyeOff size={18} />
+              )}
             </button>
           </div>
         </div>
 
-        <Button disabled={isSubmitting} className="bg-gray-200 text-black">
+        <Button
+          type="submit"
+          disabled={isSubmitting}
+          className="bg-gray-200 text-black"
+        >
           {isSubmitting ? "Resetting..." : "Reset Password"}
         </Button>
       </form>
     </div>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          Loading...
+        </div>
+      }
+    >
+      <ResetPasswordForm />
+    </Suspense>
   )
 }

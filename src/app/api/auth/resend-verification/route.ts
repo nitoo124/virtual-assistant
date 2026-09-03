@@ -37,17 +37,19 @@ export async function POST(req: Request) {
       )
     }
 
-    // Generate new token
+    // Generate new verification token
     const token = crypto.randomBytes(32).toString("hex")
 
     user.verifyToken = token
-    user.verifyTokenExpiry = Date.now() + 3600000 // 1 hour
+
+    // Token expires after 1 hour
+    user.verifyTokenExpiry = new Date(Date.now() + 3600000)
 
     await user.save()
 
     console.log("Sending verification email to:", email)
 
-    // Send email
+    // Send verification email
     await sendVerificationEmail(email, token)
 
     console.log("Verification email sent successfully")
@@ -59,10 +61,11 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     console.error("Resend verification error:", error)
+
     return NextResponse.json(
-      { 
-        message: "Failed to send verification email", 
-        error: error.message 
+      {
+        message: "Failed to send verification email",
+        error: error.message,
       },
       { status: 500 }
     )
