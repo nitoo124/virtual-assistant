@@ -1,4 +1,4 @@
-import mongoose, { Document } from "mongoose";
+import mongoose, { Document, Model } from "mongoose";
 
 export interface IUser extends Document {
   name: string;
@@ -7,7 +7,7 @@ export interface IUser extends Document {
 
   assistantName?: string;
   assistantImage?: string;
-  history?: string;
+  history: string[];
 
   createdAt: Date;
   updatedAt: Date;
@@ -15,13 +15,18 @@ export interface IUser extends Document {
   isVerified: boolean;
   verifyToken?: string;
   verifyTokenExpiry?: Date;
+
   resetPasswordToken?: string;
   resetPasswordExpiry?: Date;
 }
 
 const userSchema = new mongoose.Schema<IUser>(
   {
-    name: { type: String, required: true },
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
 
     email: {
       type: String,
@@ -39,6 +44,7 @@ const userSchema = new mongoose.Schema<IUser>(
 
     assistantName: {
       type: String,
+      trim: true,
     },
 
     assistantImage: {
@@ -46,23 +52,38 @@ const userSchema = new mongoose.Schema<IUser>(
     },
 
     history: {
+      type: [String],
+      default: [],
+    },
+
+    verifyToken: {
       type: String,
     },
 
-    verifyToken: String,
-    verifyTokenExpiry: Date,
+    verifyTokenExpiry: {
+      type: Date,
+    },
 
     isVerified: {
       type: Boolean,
       default: false,
     },
 
-    resetPasswordToken: String,
-    resetPasswordExpiry: Date
+    resetPasswordToken: {
+      type: String,
+    },
+
+    resetPasswordExpiry: {
+      type: Date,
+    },
   },
-  { timestamps: true }
-)
+  {
+    timestamps: true,
+  }
+);
 
-const User = mongoose.models.User || mongoose.model<IUser>("User", userSchema)
+const User: Model<IUser> =
+  mongoose.models.User ||
+  mongoose.model<IUser>("User", userSchema);
 
-export default User
+export default User;

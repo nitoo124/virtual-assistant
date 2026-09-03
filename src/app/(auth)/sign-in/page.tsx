@@ -11,7 +11,7 @@ import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Eye, EyeOff } from "lucide-react"
-import { signIn } from "next-auth/react"
+import { signIn, getSession } from "next-auth/react"  // ✅ getSession import karein
 import { useRouter } from "next/navigation"
 import axios from "axios"
 import { loginSchema } from "@/lib/schemas/user.schema"
@@ -46,7 +46,6 @@ function LoginPage() {
     })
 
     if (res?.error) {
-      // ❌ clean error handling (no string matching)
       if (res.error === "VERIFY_EMAIL") {
         toast.error("Please verify your email first 📩")
         setShowResend(true)
@@ -60,7 +59,19 @@ function LoginPage() {
 
     } else {
       toast.success("Login successful 🎉")
-      router.push("/dashboard")
+      
+      // ✅ YAHAN CHANGE - Assistant Page pe redirect
+      try {
+        const session = await getSession()
+        const assistantName = session?.user?.assistantName || "default"
+        
+        // ✅ Dynamic assistant page pe redirect
+        router.push(`/assistant/${assistantName}`)
+        
+      } catch (error) {
+        // Agar koi error ho toh default par redirect
+        router.push("/assistant/default")
+      }
     }
   }
 
@@ -150,7 +161,7 @@ function LoginPage() {
         {/* RESEND VERIFICATION */}
         {showResend && (
           <p className="text-sm text-gray-400 text-center mt-2">
-            Didn’t get email?{" "}
+            Didn&apos;t get email?{" "}
             <button
               type="button"
               onClick={handleResend}
@@ -163,7 +174,7 @@ function LoginPage() {
 
         {/* SIGNUP LINK */}
         <p className="text-gray-50/80 text-sm text-center">
-          Don’t have an account?{" "}
+          Don&apos;t have an account?{" "}
           <Link href="/sign-up" className="text-blue-400">
             Register
           </Link>

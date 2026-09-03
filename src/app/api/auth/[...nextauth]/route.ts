@@ -5,12 +5,13 @@ import User from "@/models/user.model"
 import connectDB from "@/lib/db/connectDB"
 import { loginSchema } from "@/lib/schemas/user.schema"
 
-// Extend the built-in session types
+// ✅ EXTEND TYPES - Assistant Name Add Karein
 declare module "next-auth" {
   interface User {
     id: string
     name?: string | null
     email?: string | null
+    assistantName?: string | null  // ✅ ADD
   }
   
   interface Session {
@@ -18,6 +19,7 @@ declare module "next-auth" {
       id: string
       name?: string | null
       email?: string | null
+      assistantName?: string | null  // ✅ ADD
     }
   }
 }
@@ -25,6 +27,7 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     id: string
+    assistantName?: string | null  // ✅ ADD
   }
 }
 
@@ -68,6 +71,7 @@ export const authOptions: NextAuthOptions = {
             id: user._id.toString(),
             name: user.name,
             email: user.email,
+            assistantName: user.assistantName || "default",  // ✅ ADD
           }
         } catch (error: any) {
           throw new Error(error.message)
@@ -90,12 +94,14 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
+        token.assistantName = user.assistantName  // ✅ ADD
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id
+        session.user.assistantName = token.assistantName  // ✅ ADD
       }
       return session
     }
