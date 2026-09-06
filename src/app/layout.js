@@ -1,25 +1,20 @@
-import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { AssistantProvider } from "../context/AssistantContext";
+import SmoothScroll from "@/components/SmoothScroll";
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "Virtual Assistant",
   description: "AI Virtual Assistant",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }) {
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
-        <AssistantProvider>
-          {children}
-        </AssistantProvider>
-
+        <SmoothScroll>
+          <AssistantProvider>{children}</AssistantProvider>
+        </SmoothScroll>
         <Toaster richColors />
       </body>
     </html>

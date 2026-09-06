@@ -9,6 +9,7 @@ import userImg from "../../../../../public/assets/user.gif";
 import axios, { AxiosError } from "axios";
 
 import { ArrowLeft, LogOut, Settings } from "lucide-react";
+
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 
@@ -42,6 +43,11 @@ interface AssistantResult {
   };
 }
 
+interface Message {
+  role: "user" | "assistant";
+  text: string;
+}
+
 function AssistantPage() {
   const router = useRouter();
 
@@ -52,25 +58,33 @@ function AssistantPage() {
   } = useAssistant();
 
   const [assistant, setAssistant] = useState<Assistant | null>(null);
-
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [userText, setUserText] = useState<string | null>(null);
-  const [aiText, setAiText] = useState<string | null>(null);
+  // ========================================
+  // CONVERSATION MESSAGES
+  // ========================================
 
-  // 👇 Controls which GIF is displayed
+  const [messages, setMessages] = useState<Message[]>([]);
+
+  // ========================================
+  // GIF STATE
+  // ========================================
+
   const [isAISpeaking, setIsAISpeaking] = useState(false);
 
   const [logoutLoading, setLogoutLoading] = useState(false);
 
   // ========================================
-  // SPEECH RECOGNITION REFS
+  // REFS
   // ========================================
 
   const recognitionRef = useRef<any>(null);
+
   const isStartingRef = useRef(false);
+
   const shouldRestartRef = useRef(true);
+
   const commandRunningRef = useRef(false);
 
   // ========================================
@@ -101,7 +115,9 @@ function AssistantPage() {
         link.rel = "noopener noreferrer";
 
         document.body.appendChild(link);
+
         link.click();
+
         document.body.removeChild(link);
       }
     } catch (error) {
@@ -167,7 +183,6 @@ function AssistantPage() {
         recognitionRef.current?.stop();
       } catch {}
 
-      // Stop AI speech also
       if (typeof window !== "undefined") {
         window.speechSynthesis?.cancel();
       }
@@ -211,9 +226,11 @@ function AssistantPage() {
         return;
       }
 
-      const encodedQuery = encodeURIComponent(searchQuery);
+      const encodedQuery =
+        encodeURIComponent(searchQuery);
 
-      const targetUrl = `https://www.google.com/search?q=${encodedQuery}`;
+      const targetUrl =
+        `https://www.google.com/search?q=${encodedQuery}`;
 
       console.log(
         "🔍 Opening Google Search:",
@@ -232,7 +249,10 @@ function AssistantPage() {
     if (type === "youtube_search") {
       const searchQuery = query?.trim();
 
-      console.log("🎥 YouTube Query:", searchQuery);
+      console.log(
+        "🎥 YouTube Query:",
+        searchQuery
+      );
 
       if (!searchQuery) {
         openInNewTab("https://www.youtube.com");
@@ -373,14 +393,18 @@ function AssistantPage() {
       speechRecognition;
 
     speechRecognition.continuous = true;
+
     speechRecognition.interimResults = false;
+
     speechRecognition.lang = "en-US";
 
     // ======================================
     // SPEECH RESULT
     // ======================================
 
-    speechRecognition.onresult = async (e: any) => {
+    speechRecognition.onresult = async (
+      e: any
+    ) => {
       const resultIndex = e.resultIndex;
 
       const transcript =
@@ -390,12 +414,21 @@ function AssistantPage() {
         return;
       }
 
-      // 👤 USER IS SPEAKING
-      setUserText(transcript);
-      setAiText(null);
+      // ==================================
+      // 👤 USER MESSAGE - SIRF 1 MESSAGE RAKHNE KE LIYE
+      // ==================================
+
+      setMessages([{
+        role: "user",
+        text: transcript,
+      }]);
+
       setIsAISpeaking(false);
 
-      console.log("🗣️ User said:", transcript);
+      console.log(
+        "🗣️ User said:",
+        transcript
+      );
 
       // ==================================
       // ASSISTANT NAME
@@ -418,10 +451,11 @@ function AssistantPage() {
           "\\$&"
         );
 
-      const nameRegex = new RegExp(
-        `\\b${escapedName}\\b`,
-        "i"
-      );
+      const nameRegex =
+        new RegExp(
+          `\\b${escapedName}\\b`,
+          "i"
+        );
 
       // ==================================
       // CHECK ASSISTANT NAME
@@ -518,10 +552,16 @@ function AssistantPage() {
         }
 
         // ================================
-        // AI RESPONSE
+        // 🤖 ASSISTANT MESSAGE - SIRF AI KA MESSAGE
         // ================================
 
-        setAiText(result.response || "");
+        if (result.response) {
+          setMessages([{
+            role: "assistant",
+            text: result.response,
+          }]);
+        }
+
         setIsAISpeaking(true);
 
         // ================================
@@ -553,24 +593,27 @@ function AssistantPage() {
             );
 
           speech.lang = "en-US";
+
           speech.rate = 1;
+
           speech.pitch = 1;
 
-          // 🤖 AI SPEAKING
+          // 🤖 AI START SPEAKING
+
           speech.onstart = () => {
             setIsAISpeaking(true);
           };
 
-          // 👤 AI FINISHED
+          // 🤖 AI FINISHED
+
           speech.onend = () => {
             setIsAISpeaking(false);
-            setAiText(null);
           };
 
-          // 👤 AI SPEECH ERROR
+          // 🤖 AI SPEECH ERROR
+
           speech.onerror = () => {
             setIsAISpeaking(false);
-            setAiText(null);
           };
 
           window.speechSynthesis.speak(
@@ -578,8 +621,8 @@ function AssistantPage() {
           );
         } else {
           // No TTS response
+
           setIsAISpeaking(false);
-          setAiText(null);
         }
       } catch (error) {
         console.error(
@@ -588,7 +631,6 @@ function AssistantPage() {
         );
 
         setIsAISpeaking(false);
-        setAiText(null);
       } finally {
         commandRunningRef.current = false;
       }
@@ -598,7 +640,9 @@ function AssistantPage() {
     // SPEECH ERROR
     // ========================================
 
-    speechRecognition.onerror = (event: any) => {
+    speechRecognition.onerror = (
+      event: any
+    ) => {
       console.error(
         "⚠️ Speech Recognition Error:",
         event.error
@@ -693,7 +737,9 @@ function AssistantPage() {
       shouldRestartRef.current = false;
 
       speechRecognition.onresult = null;
+
       speechRecognition.onerror = null;
+
       speechRecognition.onend = null;
 
       try {
@@ -808,7 +854,7 @@ function AssistantPage() {
               width={400}
               height={400}
               priority
-              className="rounded-2xl object-cover "
+              className="rounded-2xl object-cover"
             />
 
           </div>
@@ -821,44 +867,66 @@ function AssistantPage() {
           {assistant.assistantName}
         </h1>
 
+        {/* USER / AI GIF */}
+
+        <div className="mt-[-85px] md:mt-[-110px] lg:mt-[-100px] flex justify-center items-center">
+
+          <div className="relative flex items-center justify-center">
+
+            <Image
+              src={
+                isAISpeaking
+                  ? aiImg
+                  : userImg
+              }
+              alt={
+                isAISpeaking
+                  ? "AI speaking"
+                  : "User speaking"
+              }
+              width={300}
+              height={300}
+              priority
+              unoptimized
+              className="
+                w-[300px]
+                h-[300px]
+                md:w-[400px]
+                md:h-[400px]
+                object-contain
+                mix-blend-screen
+              "
+            />
+
+          </div>
+        </div>
+
         {/* ==================================
-            USER / AI GIF
+            CENTER TEXT - SIRF LAST MESSAGE
         ================================== */}
 
-        {/* USER / AI GIF */}
-<div className="mt-[-85px] md:mt-[-110px] lg:mt-[-100px] flex justify-center items-center">
-  <div className="relative flex items-center justify-center">
-    <Image
-      src={isAISpeaking ? aiImg : userImg}
-      alt={isAISpeaking ? "AI speaking" : "User speaking"}
-      width={300}
-      height={300}
-      priority
-      unoptimized
-      className="
-        w-[300px]
-        h-[300px]
-        md:w-[400px]
-        md:h-[400px]
-        object-contain
-        mix-blend-screen
-      "
-    />
-  </div>
-</div>
-
-        {/* STATUS */}
-
-        <div className="mt-1 text-white/60 text-sm">
-
-          {assistantLoading
-            ? "Thinking..."
-            : assistantError
-              ? assistantError
-              : isAISpeaking
-                ? "Speaking..."
-                : "Listening..."}
-
+        <div className="
+         w-full max-w-2xl px-2 min-h-[80px] flex items-center justify-center">
+          {messages.length === 0 ? (
+            <div className="text-white/20 text-sm">Say something...</div>
+          ) : (
+            (() => {
+              const lastMessage = messages[messages.length - 1];
+              return (
+                <div
+                  className={`text-center max-w-[90%] rounded-2xl px-6  backdrop-blur-xl border ${
+                    lastMessage.role === "user"
+                      ? "border-blue-400/20 bg-blue-500/10 text-blue-100"
+                      : "border-purple-400/20 bg-purple-500/10 text-purple-100"
+                  }`}
+                >
+                  <p className="text-lg md:text-2xl font-medium leading-relaxed">
+                    {lastMessage.text}
+                  </p>
+                </div>
+              );
+            })()
+          )}
         </div>
 
       </div>
