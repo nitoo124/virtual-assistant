@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 
 import aiImg from "../../../../../public/assets/ai.gif";
 import userImg from "../../../../../public/assets/user.gif";
@@ -43,7 +44,7 @@ interface AssistantResult {
   };
 }
 
-interface Message {
+interface CurrentMessage {
   role: "user" | "assistant";
   text: string;
 }
@@ -51,33 +52,20 @@ interface Message {
 function AssistantPage() {
   const router = useRouter();
 
-  const {
-    askAssistant,
-    loading: assistantLoading,
-    error: assistantError,
-  } = useAssistant();
+  const { askAssistant } = useAssistant();
 
   const [assistant, setAssistant] = useState<Assistant | null>(null);
+
   const [loading, setLoading] = useState<boolean>(true);
+
   const [error, setError] = useState<string | null>(null);
 
-  // ========================================
-  // CONVERSATION MESSAGES
-  // ========================================
-
-  const [messages, setMessages] = useState<Message[]>([]);
-
-  // ========================================
-  // GIF STATE
-  // ========================================
+  const [currentMessage, setCurrentMessage] =
+    useState<CurrentMessage | null>(null);
 
   const [isAISpeaking, setIsAISpeaking] = useState(false);
 
   const [logoutLoading, setLogoutLoading] = useState(false);
-
-  // ========================================
-  // REFS
-  // ========================================
 
   const recognitionRef = useRef<any>(null);
 
@@ -87,9 +75,48 @@ function AssistantPage() {
 
   const commandRunningRef = useRef(false);
 
-  // ========================================
-  // OPEN URL HELPER
-  // ========================================
+  // ==========================================
+  // FETCH ASSISTANT
+  // ==========================================
+
+  useEffect(() => {
+    fetchAssistant();
+  }, []);
+
+  const fetchAssistant = async (): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { data } = await axios.get<ApiResponse>("/api/assistant/get");
+
+      console.log("Assistant API response:", data);
+
+      if (data.success && data.assistant) {
+        setAssistant(data.assistant);
+      } else {
+        setError(data.message || "No assistant found");
+      }
+    } catch (err: unknown) {
+      console.error("Fetch assistant error:", err);
+
+      if (err instanceof AxiosError) {
+        setError(
+          err.response?.data?.message || "Failed to fetch assistant"
+        );
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An unexpected error occurred");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==========================================
+  // OPEN URL
+  // ==========================================
 
   const openInNewTab = (url: string) => {
     console.log("🚀 Opening URL:", url);
@@ -127,81 +154,9 @@ function AssistantPage() {
     }
   };
 
-  // ========================================
-  // FETCH ASSISTANT
-  // ========================================
-
-  useEffect(() => {
-    fetchAssistant();
-  }, []);
-
-  const fetchAssistant = async (): Promise<void> => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const { data } = await axios.get<ApiResponse>(
-        "/api/assistant/get"
-      );
-
-      console.log("Assistant API response:", data);
-
-      if (data.success && data.assistant) {
-        setAssistant(data.assistant);
-      } else {
-        setError(data.message || "No assistant found");
-      }
-    } catch (err: unknown) {
-      console.error("Fetch assistant error:", err);
-
-      if (err instanceof AxiosError) {
-        setError(
-          err.response?.data?.message ||
-            "Failed to fetch assistant"
-        );
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("An unexpected error occurred");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ========================================
-  // LOGOUT
-  // ========================================
-
-  const handleLogout = async () => {
-    try {
-      setLogoutLoading(true);
-
-      shouldRestartRef.current = false;
-
-      try {
-        recognitionRef.current?.stop();
-      } catch {}
-
-      if (typeof window !== "undefined") {
-        window.speechSynthesis?.cancel();
-      }
-
-      await axios.post("/api/logout");
-
-      localStorage.removeItem("token");
-
-      router.push("/sign-in");
-    } catch (error) {
-      console.error("Logout Error:", error);
-    } finally {
-      setLogoutLoading(false);
-    }
-  };
-
-  // ========================================
-  // OPEN / SEARCH COMMAND
-  // ========================================
+  // ==========================================
+  // HANDLE COMMAND
+  // ==========================================
 
   const handleCommand = (
     type: string,
@@ -214,10 +169,7 @@ function AssistantPage() {
       url,
     });
 
-    // ======================================
     // GOOGLE SEARCH
-    // ======================================
-
     if (type === "google_search") {
       const searchQuery = query?.trim();
 
@@ -226,107 +178,65 @@ function AssistantPage() {
         return;
       }
 
-      const encodedQuery =
-        encodeURIComponent(searchQuery);
+      const encodedQuery = encodeURIComponent(searchQuery);
 
       const targetUrl =
         `https://www.google.com/search?q=${encodedQuery}`;
 
-      console.log(
-        "🔍 Opening Google Search:",
-        targetUrl
-      );
-
       openInNewTab(targetUrl);
 
       return;
     }
 
-    // ======================================
     // YOUTUBE SEARCH
-    // ======================================
-
     if (type === "youtube_search") {
       const searchQuery = query?.trim();
 
-      console.log(
-        "🎥 YouTube Query:",
-        searchQuery
-      );
-
       if (!searchQuery) {
         openInNewTab("https://www.youtube.com");
         return;
       }
 
-      const encodedQuery =
-        encodeURIComponent(searchQuery);
+      const encodedQuery = encodeURIComponent(searchQuery);
 
       const targetUrl =
         `https://www.youtube.com/results?search_query=${encodedQuery}`;
-
-      console.log(
-        "🎥 Opening YouTube Search:",
-        targetUrl
-      );
 
       openInNewTab(targetUrl);
 
       return;
     }
 
-    // ======================================
     // YOUTUBE PLAY
-    // ======================================
-
     if (type === "youtube_play") {
       const searchQuery = query?.trim();
 
-      console.log(
-        "▶️ YouTube Play Query:",
-        searchQuery
-      );
-
       if (!searchQuery) {
         openInNewTab("https://www.youtube.com");
         return;
       }
 
-      const encodedQuery =
-        encodeURIComponent(searchQuery);
+      const encodedQuery = encodeURIComponent(searchQuery);
 
       const targetUrl =
         `https://www.youtube.com/results?search_query=${encodedQuery}`;
-
-      console.log(
-        "▶️ Opening YouTube:",
-        targetUrl
-      );
 
       openInNewTab(targetUrl);
 
       return;
     }
 
-    // ======================================
-    // FIXED WEBSITE URLS
-    // ======================================
-
+    // URL MAP
     const urlMap: Record<string, string> = {
-      google_open:
-        "https://www.google.com",
+      google_open: "https://www.google.com",
 
-      youtube_open:
-        "https://www.youtube.com",
+      youtube_open: "https://www.youtube.com",
 
-      linkedin_open:
-        "https://www.linkedin.com",
+      linkedin_open: "https://www.linkedin.com",
 
-      instagram_open:
-        "https://www.instagram.com",
+      instagram_open: "https://www.instagram.com",
 
-      facebook_open:
-        "https://www.facebook.com",
+      facebook_open: "https://www.facebook.com",
 
       calculator_open:
         "https://www.google.com/search?q=calculator",
@@ -335,37 +245,53 @@ function AssistantPage() {
         "https://www.google.com/search?q=weather",
     };
 
-    // ======================================
-    // OPEN URL
-    // ======================================
-
-    const targetUrl =
-      url?.trim() || urlMap[type];
+    const targetUrl = url?.trim() || urlMap[type];
 
     if (targetUrl) {
-      console.log(
-        "🌐 Opening URL:",
-        targetUrl
-      );
-
       openInNewTab(targetUrl);
-
       return;
     }
 
-    // ======================================
-    // GENERAL RESPONSE
-    // ======================================
-
-    console.log(
-      "ℹ️ No browser action for:",
-      type
-    );
+    console.log("ℹ️ No browser action for:", type);
   };
 
-  // ========================================
+  // ==========================================
+  // LOGOUT
+  // ==========================================
+
+  const handleLogout = async () => {
+    try {
+      setLogoutLoading(true);
+
+      // Stop speech recognition
+      shouldRestartRef.current = false;
+
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
+
+      // Stop AI speech
+      if (typeof window !== "undefined") {
+        window.speechSynthesis?.cancel();
+      }
+
+      // Clear current message
+      setCurrentMessage(null);
+
+      // NextAuth logout
+      await signOut({
+        callbackUrl: "/sign-in",
+      });
+    } catch (error) {
+      console.error("Logout Error:", error);
+
+      setLogoutLoading(false);
+    }
+  };
+
+  // ==========================================
   // SPEECH RECOGNITION
-  // ========================================
+  // ==========================================
 
   useEffect(() => {
     if (!assistant) {
@@ -386,11 +312,9 @@ function AssistantPage() {
 
     shouldRestartRef.current = true;
 
-    const speechRecognition =
-      new SpeechRecognition();
+    const speechRecognition = new SpeechRecognition();
 
-    recognitionRef.current =
-      speechRecognition;
+    recognitionRef.current = speechRecognition;
 
     speechRecognition.continuous = true;
 
@@ -399,12 +323,10 @@ function AssistantPage() {
     speechRecognition.lang = "en-US";
 
     // ======================================
-    // SPEECH RESULT
+    // USER SPEAKS
     // ======================================
 
-    speechRecognition.onresult = async (
-      e: any
-    ) => {
+    speechRecognition.onresult = async (e: any) => {
       const resultIndex = e.resultIndex;
 
       const transcript =
@@ -414,99 +336,54 @@ function AssistantPage() {
         return;
       }
 
-      // ==================================
-      // 👤 USER MESSAGE - SIRF 1 MESSAGE RAKHNE KE LIYE
-      // ==================================
+      console.log("🗣️ User said:", transcript);
 
-      setMessages([{
+      setCurrentMessage({
         role: "user",
         text: transcript,
-      }]);
+      });
 
       setIsAISpeaking(false);
 
-      console.log(
-        "🗣️ User said:",
-        transcript
-      );
-
-      // ==================================
-      // ASSISTANT NAME
-      // ==================================
-
-      const assistantName =
-        assistant.assistantName.trim();
+      const assistantName = assistant.assistantName.trim();
 
       if (!assistantName) {
+        setCurrentMessage(null);
         return;
       }
 
-      // ==================================
-      // ESCAPE REGEX
-      // ==================================
+      const escapedName = assistantName.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
 
-      const escapedName =
-        assistantName.replace(
-          /[.*+?^${}()|[\]\\]/g,
-          "\\$&"
-        );
-
-      const nameRegex =
-        new RegExp(
-          `\\b${escapedName}\\b`,
-          "i"
-        );
-
-      // ==================================
-      // CHECK ASSISTANT NAME
-      // ==================================
+      const nameRegex = new RegExp(
+        `\\b${escapedName}\\b`,
+        "i"
+      );
 
       if (!nameRegex.test(transcript)) {
         return;
       }
 
-      // ==================================
-      // REMOVE ASSISTANT NAME
-      // ==================================
+      const userPrompt = transcript
+        .replace(nameRegex, "")
+        .trim();
 
-      const userPrompt =
-        transcript
-          .replace(nameRegex, "")
-          .trim();
-
-      console.log(
-        "💬 User Prompt:",
-        userPrompt
-      );
+      console.log("💬 User Prompt:", userPrompt);
 
       if (!userPrompt) {
-        console.log(
-          "Assistant name detected but no command."
-        );
-
         return;
       }
 
-      // ==================================
-      // PREVENT DUPLICATE COMMAND
-      // ==================================
-
       if (commandRunningRef.current) {
-        console.log(
-          "⏳ A command is already running."
-        );
-
+        console.log("⏳ A command is already running.");
         return;
       }
 
       commandRunningRef.current = true;
 
-      // ==================================
-      // AUTHOR NAME
-      // ==================================
-
-      const authorName =
-        assistant.authorName?.trim();
+      const authorName = assistant.authorName?.trim();
 
       if (!authorName) {
         console.error(
@@ -516,34 +393,25 @@ function AssistantPage() {
 
         commandRunningRef.current = false;
 
+        setCurrentMessage(null);
+
         return;
       }
 
-      console.log(
-        "📤 Sending assistant request:",
-        {
-          userPrompt,
-          assistantName,
-          authorName,
-        }
-      );
+      console.log("📤 Sending assistant request:", {
+        userPrompt,
+        assistantName,
+        authorName,
+      });
 
       try {
-        // ================================
-        // CALL BACKEND
-        // ================================
+        const result = (await askAssistant(
+          userPrompt,
+          assistantName,
+          authorName
+        )) as AssistantResult;
 
-        const result =
-          (await askAssistant(
-            userPrompt,
-            assistantName,
-            authorName
-          )) as AssistantResult;
-
-        console.log(
-          "📥 Assistant Response:",
-          result
-        );
+        console.log("📥 Assistant Response:", result);
 
         if (!result) {
           throw new Error(
@@ -551,22 +419,22 @@ function AssistantPage() {
           );
         }
 
-        // ================================
-        // 🤖 ASSISTANT MESSAGE - SIRF AI KA MESSAGE
-        // ================================
+        // ==================================
+        // AI TEXT SHOW
+        // ==================================
 
         if (result.response) {
-          setMessages([{
+          setCurrentMessage({
             role: "assistant",
             text: result.response,
-          }]);
+          });
+
+          setIsAISpeaking(true);
         }
 
-        setIsAISpeaking(true);
-
-        // ================================
-        // EXECUTE COMMAND
-        // ================================
+        // ==================================
+        // COMMAND
+        // ==================================
 
         setTimeout(() => {
           handleCommand(
@@ -576,9 +444,9 @@ function AssistantPage() {
           );
         }, 100);
 
-        // ================================
-        // TEXT TO SPEECH
-        // ================================
+        // ==================================
+        // AI SPEECH
+        // ==================================
 
         if (
           typeof window !== "undefined" &&
@@ -598,51 +466,46 @@ function AssistantPage() {
 
           speech.pitch = 1;
 
-          // 🤖 AI START SPEAKING
-
           speech.onstart = () => {
             setIsAISpeaking(true);
           };
 
-          // 🤖 AI FINISHED
-
+          // AI FINISHED SPEAKING
           speech.onend = () => {
             setIsAISpeaking(false);
+
+            setCurrentMessage(null);
           };
 
-          // 🤖 AI SPEECH ERROR
-
+          // SPEECH ERROR
           speech.onerror = () => {
             setIsAISpeaking(false);
+
+            setCurrentMessage(null);
           };
 
-          window.speechSynthesis.speak(
-            speech
-          );
+          window.speechSynthesis.speak(speech);
         } else {
-          // No TTS response
-
           setIsAISpeaking(false);
+
+          setCurrentMessage(null);
         }
       } catch (error) {
-        console.error(
-          "❌ Assistant Error:",
-          error
-        );
+        console.error("❌ Assistant Error:", error);
 
         setIsAISpeaking(false);
+
+        setCurrentMessage(null);
       } finally {
         commandRunningRef.current = false;
       }
     };
 
-    // ========================================
+    // ==========================================
     // SPEECH ERROR
-    // ========================================
+    // ==========================================
 
-    speechRecognition.onerror = (
-      event: any
-    ) => {
+    speechRecognition.onerror = (event: any) => {
       console.error(
         "⚠️ Speech Recognition Error:",
         event.error
@@ -659,23 +522,15 @@ function AssistantPage() {
           speechRecognition.stop();
         } catch {}
       }
-
-      if (event.error === "network") {
-        console.log(
-          "Temporary speech recognition network error."
-        );
-      }
     };
 
-    // ========================================
-    // SPEECH END
-    // ========================================
+    // ==========================================
+    // RESTART RECOGNITION
+    // ==========================================
 
     speechRecognition.onend = () => {
       if (!shouldRestartRef.current) {
-        console.log(
-          "Speech recognition stopped."
-        );
+        console.log("Speech recognition stopped.");
 
         return;
       }
@@ -689,6 +544,7 @@ function AssistantPage() {
       setTimeout(() => {
         if (!shouldRestartRef.current) {
           isStartingRef.current = false;
+
           return;
         }
 
@@ -696,7 +552,7 @@ function AssistantPage() {
           speechRecognition.start();
 
           console.log(
-            "Speech recognition restarted."
+            "🎤 Speech recognition restarted."
           );
         } catch {
           console.log(
@@ -708,18 +564,16 @@ function AssistantPage() {
       }, 1000);
     };
 
-    // ========================================
-    // START SPEECH
-    // ========================================
+    // ==========================================
+    // START RECOGNITION
+    // ==========================================
 
     try {
       isStartingRef.current = true;
 
       speechRecognition.start();
 
-      console.log(
-        "🎤 Speech recognition started."
-      );
+      console.log("🎤 Speech recognition started.");
     } catch (error) {
       console.error(
         "Speech recognition start error:",
@@ -729,9 +583,9 @@ function AssistantPage() {
       isStartingRef.current = false;
     }
 
-    // ========================================
+    // ==========================================
     // CLEANUP
-    // ========================================
+    // ==========================================
 
     return () => {
       shouldRestartRef.current = false;
@@ -754,9 +608,9 @@ function AssistantPage() {
     };
   }, [assistant, askAssistant]);
 
-  // ========================================
-  // LOADING SCREEN
-  // ========================================
+  // ==========================================
+  // LOADING
+  // ==========================================
 
   if (loading) {
     return (
@@ -768,9 +622,9 @@ function AssistantPage() {
     );
   }
 
-  // ========================================
-  // ERROR SCREEN
-  // ========================================
+  // ==========================================
+  // ERROR
+  // ==========================================
 
   if (error || !assistant) {
     return (
@@ -780,9 +634,7 @@ function AssistantPage() {
         </div>
 
         <Button
-          onClick={() =>
-            router.push("/customize")
-          }
+          onClick={() => router.push("/customize")}
           className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-6 py-5"
         >
           Create Assistant
@@ -791,14 +643,14 @@ function AssistantPage() {
     );
   }
 
-  // ========================================
-  // UI
-  // ========================================
+  // ==========================================
+  // MAIN UI
+  // ==========================================
 
   return (
     <div className="w-full min-h-screen bg-gradient-to-br from-black via-[#050544] to-[#020236] text-white overflow-hidden">
 
-      {/* NAVBAR */}
+      {/* HEADER */}
 
       <div className="w-full flex items-center justify-between px-5 md:px-10 py-4 border-b border-white/10 backdrop-blur-md">
 
@@ -812,9 +664,7 @@ function AssistantPage() {
         <div className="flex items-center gap-3">
 
           <Button
-            onClick={() =>
-              router.push("/customize")
-            }
+            onClick={() => router.push("/customize")}
             className="bg-white/10 border border-white/20 hover:bg-white/20 text-white backdrop-blur-xl rounded-xl"
           >
             <Settings className="mr-2 h-4 w-4" />
@@ -836,7 +686,7 @@ function AssistantPage() {
         </div>
       </div>
 
-      {/* MAIN */}
+      {/* CONTENT */}
 
       <div className="max-w-6xl mx-auto px-5 py-8 flex flex-col items-center">
 
@@ -860,25 +710,19 @@ function AssistantPage() {
           </div>
         </div>
 
-        {/* NAME */}
+        {/* ASSISTANT NAME */}
 
         <h1 className="text-2xl md:text-6xl font-extrabold mt-2 text-center bg-gradient-to-r from-white to-blue-400 bg-clip-text text-transparent">
-          I'm{" "}
-          {assistant.assistantName}
+          I'm {assistant.assistantName}
         </h1>
 
-        {/* USER / AI GIF */}
+        {/* AI / USER ANIMATION */}
 
-        <div className="mt-[-85px] md:mt-[-110px] lg:mt-[-100px] flex justify-center items-center">
-
+        <div className="mt-[-70px] md:mt-[-100px] lg:mt-[-100px] flex justify-center items-center">
           <div className="relative flex items-center justify-center">
 
             <Image
-              src={
-                isAISpeaking
-                  ? aiImg
-                  : userImg
-              }
+              src={isAISpeaking ? aiImg : userImg}
               alt={
                 isAISpeaking
                   ? "AI speaking"
@@ -901,32 +745,38 @@ function AssistantPage() {
           </div>
         </div>
 
-        {/* ==================================
-            CENTER TEXT - SIRF LAST MESSAGE
-        ================================== */}
+        {/* CURRENT USER / AI TEXT */}
 
-        <div className="
-         w-full max-w-2xl px-2 min-h-[80px] flex items-center justify-center">
-          {messages.length === 0 ? (
-            <div className="text-white/20 text-sm">Say something...</div>
-          ) : (
-            (() => {
-              const lastMessage = messages[messages.length - 1];
-              return (
-                <div
-                  className={`text-center max-w-[90%] rounded-2xl px-6  backdrop-blur-xl border ${
-                    lastMessage.role === "user"
-                      ? "border-blue-400/20 bg-blue-500/10 text-blue-100"
-                      : "border-purple-400/20 bg-purple-500/10 text-purple-100"
-                  }`}
-                >
-                  <p className="text-lg md:text-2xl font-medium leading-relaxed">
-                    {lastMessage.text}
-                  </p>
-                </div>
-              );
-            })()
+        <div className="w-full min-h-[80px] flex items-center justify-center px-5 mt-[-60px]">
+
+          {currentMessage && (
+            <div className="w-full max-w-4xl text-center">
+
+              <p
+                className={`
+                  mt-[-60px]
+                  md:mt-[-90px]
+                  text-lg
+                  md:text-2xl
+                  lg:text-3xl
+                  font-medium
+                  leading-relaxed
+                  transition-all
+                  duration-300
+                  break-words
+                  ${
+                    currentMessage.role === "user"
+                      ? "text-blue-200"
+                      : "text-purple-200"
+                  }
+                `}
+              >
+                {currentMessage.text}
+              </p>
+
+            </div>
           )}
+
         </div>
 
       </div>
